@@ -1,0 +1,6 @@
+<extension version="1">
+  <name>LockHistory</name>
+  <description>Analyze locked point history parsed from the auditlog.</description>
+  <version>0.1.0</version>
+  <vendor>Automatic Controls Equipment Systems, Inc.</vendor>
+</extension>

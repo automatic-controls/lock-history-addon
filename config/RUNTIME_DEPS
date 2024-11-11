@@ -1,0 +1,4 @@
+file:core:modules\core
+file:common:modules\common
+file:commonexceptions:modules\commonexceptions
+file:commonbaseutils:bin\lib

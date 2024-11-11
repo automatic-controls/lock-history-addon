@@ -1,0 +1,249 @@
+<!--
+  BSD 3-Clause License
+  Copyright (c) 2022, Automatic Controls Equipment Systems, Inc.
+  Contributors: Cameron Vogt (@cvogt729)
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>
+      Lock History
+    </title>
+    <link rel="stylesheet" type="text/css" href="../../../../root/webapp/main.css"/>
+    <script>
+      function resize(input){
+        const styles = window.getComputedStyle(input);
+        hiddenSpan.style.fontFamily = styles.fontFamily;
+        hiddenSpan.style.fontSize = styles.fontSize;
+        hiddenSpan.style.fontStyle = styles.fontStyle;
+        hiddenSpan.style.fontWeight = styles.fontWeight;
+        hiddenSpan.style.letterSpacing = styles.letterSpacing;
+        hiddenSpan.style.textTransform = styles.textTransform;
+        hiddenSpan.style.borderLeftWidth = styles.borderLeftWidth;
+        hiddenSpan.style.borderRightWidth = styles.borderRightWidth;
+        hiddenSpan.style.paddingLeft = styles.paddingLeft;
+        hiddenSpan.style.paddingRight = styles.paddingRight;
+        hiddenSpan.innerText = input.value;
+        input.style.width = hiddenSpan.offsetWidth+"px";
+      }
+      function validateInt(field,max){
+        var s = field.value;
+        if (s.length>0){
+          s = s.replaceAll(/\D/g,"");
+          if (s.length>0){
+            if (s.length>15){
+              s = s.substring(0,15);
+            }
+            s = parseInt(s);
+            s = Math.min(s,max);
+            field.value = s.toString();
+          }else{
+            field.value = "";
+          }
+        }
+      }
+      function toDate(epochSeconds){
+        const d = new Date(1000*epochSeconds);
+        return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" - "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+      }
+      function pad(x){
+        if (x>9){
+          return String(x);
+        }else{
+          return "0"+String(x);
+        }
+      }
+      function escapeCSV(str){
+        if (str.indexOf(',')==-1 && str.indexOf('"')==-1 && str.indexOf('\n')==-1 && str.indexOf('\r')==-1){
+          return str;
+        }else{
+          return '"'+str.replace(new RegExp("\"","g"),"\"\"")+'"';
+        }
+      }
+      function prepareDataExport() {
+        if (exportDataButton.getAttribute("href").length === 1 && DATA) {
+          var CSV = "Timestamp,Operator,Location,Point Name,Attribute,Old Value,New Value";
+          for (const entry of DATA){
+            CSV+='\n';
+            CSV+=escapeCSV(entry["timestamp"])+',';
+            CSV+=escapeCSV(entry["operator"])+',';
+            if (entry["locationLink"]=="#"){
+              CSV+=escapeCSV(entry["location"])+',';
+            }else{
+              CSV+=escapeCSV("=HYPERLINK(\""+window.location.origin+entry["locationLink"]+"\",\""+entry["location"]+"\")")+',';
+            }
+            if (entry["pointLink"]=="#"){
+              CSV+=escapeCSV(entry["pointName"])+',';
+            }else{
+              CSV+=escapeCSV("=HYPERLINK(\""+window.location.origin+entry["pointLink"]+"\",\""+entry["pointName"]+"\")")+',';
+            }
+            CSV+=escapeCSV(entry["attribute"])+',';
+            CSV+=escapeCSV(entry["oldValue"])+',';
+            CSV+=escapeCSV(entry["newValue"]);
+          }
+          exportDataButton.setAttribute("href", "data:text/csv;charset=utf-8," + encodeURIComponent(CSV));
+        }else if (!DATA){
+          statusBox.innerText = "No data to export.";
+        }
+      }
+      function refresh(){
+        if (refreshButton.disabled){
+          return;
+        }
+        const hoursVal = document.getElementById("hoursField").value;
+        if (hoursVal.length==0 || hoursVal=="0"){
+          statusBox.innerText = "Please specify a valid time period.";
+          return
+        }
+        const milli = String(parseInt(hoursVal)*3600000);
+        refreshButton.disabled = true;
+        const req = new XMLHttpRequest();
+        req.open("POST","__PREFIX__/index?type=refresh");
+        req.setRequestHeader("content-type", "application/x-www-form-urlencoded");
+        req.timeout = 5000;
+        req.onreadystatechange = function(){
+          if (this.readyState===4){
+            refreshButton.disabled = false;
+            if (this.status===200){
+              try{
+                DATA = JSON.parse(this.responseText);
+                exportDataButton.setAttribute("href", "#");
+                for (const entry of DATA){
+                  entry["timestamp"] = toDate(entry["epochSeconds"]);
+                }
+                const body = document.getElementById("tableBody");
+                body.replaceChildren();
+                for (const entry of DATA){
+                  const tr = document.createElement("TR");
+                  const tdTimestamp = document.createElement("TD");
+                  tdTimestamp.innerText = entry["timestamp"];
+                  tr.appendChild(tdTimestamp);
+                  const tdOperator = document.createElement("TD");
+                  tdOperator.innerText = entry["operator"];
+                  tr.appendChild(tdOperator);
+                  const tdLocation = document.createElement("TD");
+                  if (entry["locationLink"]=="#"){
+                    tdLocation.innerText = entry["location"];
+                  }else{
+                    const hrefLocation = document.createElement("A");
+                    hrefLocation.setAttribute("class", "e");
+                    hrefLocation.innerText = entry["location"];
+                    hrefLocation.setAttribute("href", entry["locationLink"]);
+                    hrefLocation.setAttribute("target", "_blank");
+                    hrefLocation.style.border = "none";
+                    hrefLocation.style.padding = "none";
+                    hrefLocation.style.borderRadius = "0";
+                    tdLocation.appendChild(hrefLocation);
+                  }
+                  tr.appendChild(tdLocation);
+                  const tdPointName = document.createElement("TD");
+                  if (entry["pointLink"]==="#"){
+                    tdPointName.innerText = entry["pointName"];
+                  }else{
+                    const hrefPoint = document.createElement("A");
+                    hrefPoint.setAttribute("class", "e");
+                    hrefPoint.innerText = entry["pointName"];
+                    hrefPoint.setAttribute("href", entry["pointLink"]);
+                    hrefPoint.setAttribute("target", "_blank");
+                    hrefPoint.style.border = "none";
+                    hrefPoint.style.padding = "none";
+                    hrefPoint.style.borderRadius = "0";
+                    tdPointName.appendChild(hrefPoint);
+                  }
+                  tr.appendChild(tdPointName);
+                  const tdAttribute = document.createElement("TD");
+                  tdAttribute.innerText = entry["attribute"];
+                  tr.appendChild(tdAttribute);
+                  const tdOldValue = document.createElement("TD");
+                  tdOldValue.innerText = entry["oldValue"];
+                  tr.appendChild(tdOldValue);
+                  const tdNewValue = document.createElement("TD");
+                  tdNewValue.innerText = entry["newValue"];
+                  tr.appendChild(tdNewValue);
+                  body.appendChild(tr);
+                }
+                statusBox.innerText = "Success.";
+              }catch(e){
+                console.log(e);
+                statusBox.innerText = "Parsing error, see the log for more details (F12).";
+              }
+            }else if (this.status==0){
+              statusBox.innerText = "Request timed out.";
+            }else{
+              statusBox.innerText = "HTTP Error "+this.status;
+            }
+          }
+        };
+        statusBox.innerText = "Refreshing...";
+        req.send(
+          "milli="+encodeURIComponent(milli)+
+          "&sortloc="+encodeURIComponent(String(sortByLocation.checked))+
+          "&onlylock="+encodeURIComponent(String(onlyLockedPoints.checked))+
+          "&onlylast="+encodeURIComponent(String(onlyLastEntry.checked))+
+          "&loc="+encodeURIComponent(locField.value)
+        );
+      }
+    </script>
+  </head>
+  <body>
+    <div style="text-align:center">
+      <h1 id="mainTitle">Lock History</h1>
+      <div class="divGrouping">
+        <label>Status:</label>
+        <span id="statusBox" style="color:red"></span>
+      </div>
+      <br>
+      <div style="user-select:none;">
+        <div class="divGrouping" title="If this is checked, then results will be sorted by location and microblock, as opposed to using chronological order only.">
+          <input type="checkbox" id="sortByLocation">
+          <label for="sortByLocation" id="sortByLocationLabel">Sort By Location</label>
+        </div>
+        <br>
+        <div class="divGrouping" title="If this is checked, then results will be filtered to include only those points which are currently locked.">
+          <input type="checkbox" id="onlyLockedPoints" checked>
+          <label for="onlyLockedPoints" id="onlyLockedPointsLabel">Only Locked Points</label>
+        </div>
+        <br>
+        <div class="divGrouping" title="If this is checked, then results will be filtered to include only the last entry for a given location.">
+          <input type="checkbox" id="onlyLastEntry" checked>
+          <label for="onlyLastEntry" id="onlyLastEntryLabel">Only Last Entry</label>
+        </div>
+        <br>
+        <div class="divGrouping" title="Specifies how many hours into the past that data should be collected from.">
+          <label for="hoursField">Time Period:</label>
+          <input class="c" type="text" id="hoursField" oninput="validateInt(this,87600);resize(this)" value="24">
+          <span>hrs</span>
+        </div>
+        <br>
+        <div class="divGrouping" title="An optional location filter. Type the reference name of some location on the Geo tree.">
+          <label for="locField">Location:</label>
+          <input class="c" type="text" id="locField" oninput="resize(this)">
+        </div>
+        <br><br>
+        <button class="e" id="refreshButton" onclick="refresh()">Refresh</button>
+        <a class="e" id="exportDataButton" href="#" download="lock_history.csv" onclick="prepareDataExport()">Export Data</a>
+        <a class="e" href="https://github.com/automatic-controls/lock-history-addon/" target="_blank">Documentation</a>
+      </div>
+      <br>
+      <table>
+        <thead>
+          <td>Timestamp</td>
+          <td>Operator</td>
+          <td>Location</td>
+          <td>Point Name</td>
+          <td>Attribute</td>
+          <td>Old Value</td>
+          <td>New Value</td>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <span id="hiddenSpan" style="min-width:2em;color:black;display:inline-block;position:absolute;left:-100000px;white-space:pre"></span>
+    </div>
+    <script>
+      var DATA = undefined;
+      resize(hoursField);
+      resize(locField);
+      refresh();
+    </script>
+  </body>
+</html>
